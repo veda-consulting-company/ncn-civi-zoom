@@ -89,9 +89,11 @@ class CRM_CivirulesActions_Participant_AddToZoom extends CRM_Civirules_Action{
 	 */
 	private function getContactData($id) {
 		$result = [];
+		$participant_result = [];
+		$iso_result = [];
 
 		try {
-			$result = civicrm_api3('Contact', 'get', [
+			$participant_result = civicrm_api3('Contact', 'get', [
 			  'sequential' => 1,
 			  'return' => ["email", "first_name", "last_name", "street_address", "city", "state_province_name", "country", "postal_code"],
 			  'id' => $id,
@@ -105,6 +107,33 @@ class CRM_CivirulesActions_Participant_AddToZoom extends CRM_Civirules_Action{
 			);
 		}
 
+		try {
+            $iso_result = civicrm_api3('Country', 'get', [
+                'sequential' => 1,
+                'return' => ["iso_code"],
+                'id' => $participant_result[country_id],
+            ])['values'][0];
+
+        }  catch (Exception $e) {
+            watchdog(
+                'NCN-Civi-Zoom CiviRules Action (AddToZoom)',
+                'Something went wrong with getting the country code for the contact.',
+                array(),
+                WATCHDOG_INFO
+            );
+        }
+
+        //Combine the fields for a result array in the order that the Zoom API needs
+        //https://marketplace.zoom.us/docs/api-reference/zoom-api/meetings/meetingregistrantcreate
+
+        $result = [
+            'email' => $participant_result['email'],
+            'first_name' => $participant_result['first_name'],
+            'last_name' => $participant_result['last_name'],
+            'street_address' => $participant_result['street_address'],
+            'city' => $participant_result['city'],
+            'country' => $iso_result['iso_code'],
+            'postal_code' => $participant_result['postal_code']];
 		return $result;
 	}
 
@@ -112,7 +141,7 @@ class CRM_CivirulesActions_Participant_AddToZoom extends CRM_Civirules_Action{
 	 * Add's the given participant data as a single participant
 	 * to a Zoom Webinar/Meeting with the given id.
 	 *
-	 * @param array $participant participant data where email, first_name, and last_name are required
+	 * @param array $participant participant data where email, first_name, and last_name are required - ISO Country Code is required for Webinars
 	 * @param int $entityID id of an existing Zoom webinar/meeting
 	 * @param string $entity 'Meeting' or 'Webinar'
 	 */
@@ -493,3 +522,4 @@ class CRM_CivirulesActions_Participant_AddToZoom extends CRM_Civirules_Action{
     return [$isRequestOK, $result];
   }
 }
+
